@@ -27,9 +27,30 @@ const envSchema = z.object({
     .string()
     .min(32, "JWT_SECRET debe tener al menos 32 caracteres")
     .optional(),
+
+  CORS_ORIGIN : z.string().default ("http://localhost:5173"),
+
+  TRUST_PROXY: z.enum(["loopback", "none"]).
+    default("none"),
+
+    RATELIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900000),
+
+  RATELIMIT_MAX: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(100),
 });
 
-const result = envSchema.safeParse(process.env);
+const result = envSchema.safeParse(
+  (globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> };
+  }).process?.env ?? {}
+);
 
 if (!result.success) {
   console.error("Configuración de entorno inválida:");
