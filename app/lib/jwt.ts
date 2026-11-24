@@ -33,5 +33,5 @@ export function verifyAccessToken(token: string) {
         audience: "webstore",
     });
 }
-export const ACCESS_TOKEN_EXPIRATION_SECONDS =
-    TOKEN_EXPIRATION_SECONDS;
+
+export const ACCESS_TOKEN_EXPIRATION_SECONDS = TOKEN_EXPIRATION_SECONDS;

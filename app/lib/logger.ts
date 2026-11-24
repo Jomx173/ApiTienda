@@ -11,6 +11,7 @@ export const logger = pino({
 
     redact: {
         paths: [
+            "req.headers.authorization",
             "req.headers.authotization",
             "req.headers.cookie",
             "req.body.password",
@@ -19,7 +20,7 @@ export const logger = pino({
             "password",
             "token",
             "refreshToken",
-                ],
-                censor: "[REDACTED]",
+        ],
+        censor: "[REDACTED]",
     },
 });
