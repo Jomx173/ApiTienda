@@ -1,66 +1,101 @@
-import type { Request, RequestHandler } from "express";
-import { jwtVerify, SignJWT, type JWTPayload } from "jose";
-import { AppError } from "../../src/errors/index.js";
-import { env } from "../../src/config/index.js";
-import { logger } from "../../src/lib/logger.js";
+import type { RequestHandler } from "express";
+import { AppError } from "../errors/AppError.js";
+import { verifyAccessToken } from "../lib/jwt.js";
+import { prisma } from "../lib/prisma.js";
 
-export interface AuthenticatedUser {
-  id_usuario: number;
-  id_cliente: number;
-  usuario: string;
-  rol: string;
-}
-
-export interface AuthenticatedRequest extends Request {
-  user?: AuthenticatedUser;
-}
-
-export const authenticate: RequestHandler = async (
-  req: AuthenticatedRequest,
-  _res,
-  next
-) => {
+// Sustituye el middleware anterior: comprueba estado en DB en cada petición protegida.
+export const authenticate: RequestHandler = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const authorization = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new AppError("Token de acceso requerido", 401, "UNAUTHORIZED");
+    if (!authorization)
+      throw new AppError(
+        "Token de autenticación requerido",
+        401,
+        "AUTH_TOKEN_REQUIRED"
+      );
+
+    const match = /^Bearer ([^\s]+)$/i.exec(authorization);
+
+    if (!match)
+      throw new AppError(
+        "Formato de autorización inválido",
+        401,
+        "AUTH_TOKEN_INVALID"
+      );
+
+    let payload: ReturnType<typeof verifyAccessToken>;
+
+    try {
+      payload = verifyAccessToken(match[1]!);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.name === "TokenExpiredError"
+      )
+        throw new AppError(
+          "El token ha expirado",
+          401,
+          "AUTH_TOKEN_EXPIRED"
+        );
+
+      if (
+        error instanceof Error &&
+        (
+          error.name === "JsonWebTokenError" ||
+          error.name === "NotBeforeError" ||
+          error instanceof SyntaxError
+        )
+      )
+        throw new AppError(
+          "Token de autenticación inválido",
+          401,
+          "AUTH_TOKEN_INVALID"
+        );
+
+      throw error;
     }
 
-    const token = authHeader.slice(7);
+    if (
+      typeof payload === "string" ||
+      typeof payload.sub !== "string" ||
+      !/^[1-9]\d*$/.test(payload.sub)
+    )
+      throw new AppError(
+        "Token de autenticación inválido",
+        401,
+        "AUTH_TOKEN_INVALID"
+      );
 
-    const secret = new TextEncoder().encode(env.JWT_SECRET);
+    const userId = Number(payload.sub);
 
-    const { payload } = await jwtVerify(token, secret, {
-      clockTolerance: 30,
+    if (!Number.isSafeInteger(userId))
+      throw new AppError(
+        "Identificador de usuario inválido",
+        401,
+        "AUTH_TOKEN_INVALID"
+      );
+
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { status: true }
     });
 
-    const p = payload as Record<string, unknown>;
+    if (!user || user.status !== "active")
+      throw new AppError(
+        "Usuario inactivo o inexistente",
+        401,
+        "USER_NOT_AVAILABLE"
+      );
 
-    req.user = {
-      id_usuario: Number(p.sub),
-      id_cliente: Number(p.id_cliente),
-      usuario: String(p.usuario),
-      rol: String(p.rol),
-    };
+    res.locals.auth = { userId };
+
+    // Compatibilidad con requirePermission actual
+    res.locals.authenticatedUserId = userId;
 
     next();
+
   } catch (error) {
-    if (error instanceof AppError) {
-      next(error);
-      return;
-    }
-
-    logger.warn({ err: error }, "Autenticación fallida");
-    next(new AppError("Token inválido o expirado", 401, "UNAUTHORIZED"));
+    next(error);
   }
-};
-
-export const signToken = (payload: JWTPayload, expiresIn: string) => {
-  const secret = new TextEncoder().encode(env.JWT_SECRET);
-
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime(expiresIn)
-    .sign(secret);
 };
