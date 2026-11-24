@@ -27,6 +27,27 @@ const envSchema = z.object({
     .string()
     .min(32, "JWT_SECRET debe tener al menos 32 caracteres")
     .optional(),
+
+
+CORS_ORIGIN: z
+.string()
+.default("http://localhost:5173"),
+
+  RATE_LIMIT_WINDOW_MS: z
+    .coerce.number()
+    .int()
+    .positive()
+    .default(900000),
+
+  RATE_LIMIT_MAX: z
+    .coerce.number()
+    .int()
+    .positive()
+    .default(100),
+
+    TRUST_PROXY: z.enum(["none", "loopback"])
+      .default("none"),
+
 });
 
 const result = envSchema.safeParse(process.env);
