@@ -15,8 +15,8 @@
   "include": [
     "app/**/*.ts",
     "generated/**/*.ts",
-    "prisma7.config.ts"
-, "app/middlewares/authenticate.ts", "app/middlewares/rateLimiter.ts", "app/middlewares/requestLogger.ts", "app/middlewares/requirePermission.ts", "app/middlewares/validateRequest.ts"  ],
+    "prisma.config.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist"
